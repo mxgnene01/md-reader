@@ -33,6 +33,25 @@ interface FetchUrlResponse {
   error?: string
 }
 
+interface VaultFileEntry {
+  name: string
+  url: string
+  relativePath: string
+}
+
+interface ListVaultFilesResponse {
+  ok: boolean
+  files?: VaultFileEntry[]
+  error?: string
+}
+
+interface SearchResult {
+  file: VaultFileEntry
+  score: number
+}
+
+const MAX_SEARCH_RESULTS = 50
+
 interface FolderBrowserOptions {
   container: HTMLElement
   rootURL: string
@@ -41,6 +60,7 @@ interface FolderBrowserOptions {
   showParentLink?: boolean
   sortOrder?: FolderSortOrder
   onSortOrderChange?: (sortOrder: FolderSortOrder) => void
+  onQuickOpen?: () => void
 }
 
 export function isLocalDirectoryPage(
@@ -230,6 +250,7 @@ export async function renderFolderBrowser({
   showParentLink = true,
   sortOrder = 'name-desc',
   onSortOrderChange,
+  onQuickOpen,
 }: FolderBrowserOptions): Promise<void> {
   container.replaceChildren()
   let activeSortOrder = normalizeFolderSortOrder(sortOrder)
@@ -269,12 +290,167 @@ export async function renderFolderBrowser({
   header.append(rootLink, sortControl)
   if (showParentLink) header.append(parentLink)
 
+  const search = document.createElement('div')
+  search.className = className.FOLDER_SEARCH
+  const searchInput = document.createElement('input')
+  searchInput.className = className.FOLDER_SEARCH_INPUT
+  searchInput.type = 'search'
+  searchInput.placeholder = '搜索文件… (⌘K)'
+  searchInput.autocomplete = 'off'
+  searchInput.spellcheck = false
+  searchInput.setAttribute('aria-label', '搜索根目录中的 Markdown 文件')
+  searchInput.setAttribute('aria-autocomplete', 'list')
+  searchInput.setAttribute('aria-expanded', 'false')
+  search.append(searchInput)
+
   const tree = document.createElement('ul')
   tree.className = className.FOLDER_TREE
+  const searchStatus = document.createElement('div')
+  searchStatus.className = className.FOLDER_SEARCH_STATUS
+  searchStatus.hidden = true
+  const searchResults = document.createElement('ul')
+  searchResults.className = className.FOLDER_SEARCH_RESULTS
+  searchResults.id = `md-reader-folder-search-${Date.now()}`
+  searchResults.setAttribute('role', 'listbox')
+  searchResults.hidden = true
+  searchInput.setAttribute('aria-controls', searchResults.id)
   const status = document.createElement('div')
   status.className = className.FOLDER_STATUS
   status.textContent = '正在读取文件夹…'
-  container.append(header, status, tree)
+  container.append(header, search, searchStatus, status, tree, searchResults)
+
+  const filesPromise = requestVaultFiles(rootURL)
+  let activeSearchIndex = 0
+  let searchVersion = 0
+
+  const hideSearchResults = () => {
+    searchVersion += 1
+    activeSearchIndex = 0
+    tree.hidden = false
+    searchStatus.hidden = true
+    searchResults.hidden = true
+    searchResults.replaceChildren()
+    searchInput.setAttribute('aria-expanded', 'false')
+    searchInput.removeAttribute('aria-activedescendant')
+  }
+
+  const selectSearchResult = (index: number) => {
+    const results = Array.from(
+      searchResults.querySelectorAll<HTMLAnchorElement>(
+        `.${className.FOLDER_SEARCH_RESULT}`,
+      ),
+    )
+    if (!results.length) return
+    activeSearchIndex = (index + results.length) % results.length
+    results.forEach((result, resultIndex) => {
+      const active = resultIndex === activeSearchIndex
+      result.classList.toggle(className.FOLDER_SEARCH_RESULT_ACTIVE, active)
+      result.setAttribute('aria-selected', String(active))
+      if (active) {
+        searchInput.setAttribute('aria-activedescendant', result.id)
+        result.scrollIntoView({ block: 'nearest' })
+      }
+    })
+  }
+
+  const renderSearchResults = async () => {
+    const query = searchInput.value.trim()
+    if (!query) {
+      hideSearchResults()
+      return
+    }
+
+    const version = ++searchVersion
+    tree.hidden = true
+    searchResults.hidden = true
+    searchStatus.hidden = false
+    searchStatus.textContent = '正在建立文件索引…'
+    searchInput.setAttribute('aria-expanded', 'true')
+
+    try {
+      const files = await filesPromise
+      if (version !== searchVersion) return
+      const matches = searchVaultFiles(files, query)
+      searchResults.replaceChildren()
+      activeSearchIndex = 0
+
+      matches.slice(0, MAX_SEARCH_RESULTS).forEach((match, index) => {
+        const item = document.createElement('li')
+        const link = document.createElement('a')
+        const name = document.createElement('span')
+        const path = document.createElement('span')
+        link.id = `${searchResults.id}-${index}`
+        link.className = className.FOLDER_SEARCH_RESULT
+        link.href = match.file.url
+        link.title = match.file.relativePath
+        link.setAttribute('role', 'option')
+        name.className = className.FOLDER_SEARCH_RESULT_NAME
+        name.textContent = stripMarkdownExtension(match.file.name)
+        path.className = className.FOLDER_SEARCH_RESULT_PATH
+        path.textContent = getParentPath(match.file.relativePath)
+        link.append(name, path)
+        link.addEventListener('mousemove', () => selectSearchResult(index))
+        item.append(link)
+        searchResults.append(item)
+      })
+
+      const shown = Math.min(matches.length, MAX_SEARCH_RESULTS)
+      searchStatus.textContent = matches.length
+        ? `${matches.length} 个结果${
+            matches.length > shown ? `，显示前 ${shown} 个` : ''
+          }`
+        : '没有匹配的 Markdown 文件'
+      searchResults.hidden = !matches.length
+      if (matches.length) selectSearchResult(0)
+    } catch (error) {
+      if (version !== searchVersion) return
+      searchResults.hidden = true
+      searchStatus.textContent = `搜索失败：${error.message || error}`
+      searchStatus.classList.add(className.FOLDER_STATUS_ERROR)
+    }
+  }
+
+  searchInput.addEventListener('input', () => {
+    searchStatus.classList.remove(className.FOLDER_STATUS_ERROR)
+    void renderSearchResults()
+  })
+  searchInput.addEventListener('keydown', event => {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      selectSearchResult(activeSearchIndex + 1)
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault()
+      selectSearchResult(activeSearchIndex - 1)
+    } else if (event.key === 'Enter') {
+      const active = searchResults.querySelector<HTMLAnchorElement>(
+        `.${className.FOLDER_SEARCH_RESULT_ACTIVE}`,
+      )
+      if (active) {
+        event.preventDefault()
+        window.location.href = active.href
+      }
+    } else if (event.key === 'Escape') {
+      searchInput.value = ''
+      hideSearchResults()
+    }
+  })
+  document.addEventListener(
+    'keydown',
+    event => {
+      if (
+        (event.metaKey || event.ctrlKey) &&
+        !event.altKey &&
+        event.key.toLocaleLowerCase() === 'k'
+      ) {
+        event.preventDefault()
+        event.stopPropagation()
+        onQuickOpen?.()
+        searchInput.focus()
+        searchInput.select()
+      }
+    },
+    true,
+  )
 
   try {
     const html = initialHTML ?? (await fetchLocalText(rootURL))
@@ -440,6 +616,96 @@ function fetchLocalText(url: string): Promise<string> {
       },
     )
   })
+}
+
+function requestVaultFiles(rootURL: string): Promise<VaultFileEntry[]> {
+  return new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage(
+      { action: 'listVaultFiles', data: { rootURL } },
+      (response: ListVaultFilesResponse) => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message))
+          return
+        }
+        if (!response?.ok) {
+          reject(new Error(response?.error || '无法建立文件索引'))
+          return
+        }
+        resolve(response.files || [])
+      },
+    )
+  })
+}
+
+function searchVaultFiles(
+  files: VaultFileEntry[],
+  query: string,
+): SearchResult[] {
+  const tokens = normalizeSearchText(query).split(/\s+/).filter(Boolean)
+  if (!tokens.length) return []
+
+  return files
+    .map(file => {
+      const name = normalizeSearchText(stripMarkdownExtension(file.name))
+      const path = normalizeSearchText(file.relativePath)
+      const tokenScores = tokens.map(token =>
+        scoreSearchToken(name, path, token),
+      )
+      if (tokenScores.some(score => score === undefined)) return undefined
+      return {
+        file,
+        score: tokenScores.reduce((total, score) => total + score, 0),
+      }
+    })
+    .filter((result): result is SearchResult => Boolean(result))
+    .sort(
+      (left, right) =>
+        left.score - right.score ||
+        left.file.relativePath.localeCompare(right.file.relativePath, 'zh-CN', {
+          numeric: true,
+        }),
+    )
+}
+
+function scoreSearchToken(
+  name: string,
+  path: string,
+  token: string,
+): number | undefined {
+  if (name === token) return 0
+  if (name.startsWith(token)) return 10 + name.length - token.length
+  const nameIndex = name.indexOf(token)
+  if (nameIndex >= 0) return 30 + nameIndex
+  const pathIndex = path.indexOf(token)
+  if (pathIndex >= 0) return 60 + pathIndex
+
+  const fuzzyScore = scoreSubsequence(name, token)
+  return fuzzyScore === undefined ? undefined : 100 + fuzzyScore
+}
+
+function scoreSubsequence(value: string, query: string): number | undefined {
+  let valueIndex = 0
+  let score = 0
+  for (const character of query) {
+    const matchIndex = value.indexOf(character, valueIndex)
+    if (matchIndex < 0) return undefined
+    score += matchIndex - valueIndex
+    valueIndex = matchIndex + character.length
+  }
+  return score + value.length - query.length
+}
+
+function normalizeSearchText(value: string): string {
+  return value.normalize('NFKC').toLocaleLowerCase('zh-CN')
+}
+
+function stripMarkdownExtension(name: string): string {
+  return name.replace(/\.(?:md|mdx|mdc|mkd|markdown|txt)$/i, '')
+}
+
+function getParentPath(relativePath: string): string {
+  const separator = relativePath.lastIndexOf('/')
+  return separator < 0 ? '/' : relativePath.slice(0, separator) || '/'
 }
 
 function isMarkdownFile(path: string): boolean {

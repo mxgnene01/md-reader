@@ -217,6 +217,15 @@ function main(data: Data) {
         configData.folderSortOrder = sortOrder
         void storage.set('folderSortOrder', sortOrder)
       },
+      onQuickOpen: () => {
+        if (window.innerWidth <= 960) {
+          document.body.classList.add(className.SIDE_EXPANDED)
+        } else if (document.body.classList.contains(className.SIDE_COLLAPSED)) {
+          document.body.classList.remove(className.SIDE_COLLAPSED)
+          configData.hiddenSide = false
+          void storage.set('hiddenSide', false)
+        }
+      },
     })
   }
   mdSide.append(mdOutline)

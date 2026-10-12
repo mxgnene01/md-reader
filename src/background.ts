@@ -15,11 +15,23 @@ interface NativeFolderEntry {
   url: string
   isDirectory: boolean
 }
+interface VaultFileEntry {
+  name: string
+  url: string
+  relativePath: string
+}
 const directoryEntriesCache = new Map<
   string,
   {
     createdAt: number
     entries: Promise<NativeFolderEntry[]>
+  }
+>()
+const vaultFilesCache = new Map<
+  string,
+  {
+    createdAt: number
+    files: Promise<VaultFileEntry[]>
   }
 >()
 
@@ -49,7 +61,79 @@ async function messageHandler(
     case 'resolveWikiLinks':
       resolveWikiLinkTargets(data, sender.url).then(callback)
       break
+    case 'listVaultFiles':
+      listVaultFiles(data, sender.url).then(callback)
+      break
   }
+}
+
+async function listVaultFiles(data: any, senderURL?: string) {
+  try {
+    const rootURL = normalizeDirectoryURL(data?.rootURL)
+    if (!rootURL || !senderURL || !isURLWithinRoot(senderURL, rootURL)) {
+      throw new Error('File search must stay inside the local root.')
+    }
+    return { ok: true, files: await getVaultFiles(rootURL) }
+  } catch (error) {
+    return { ok: false, error: error.message || String(error) }
+  }
+}
+
+function getVaultFiles(rootURL: string): Promise<VaultFileEntry[]> {
+  const cached = vaultFilesCache.get(rootURL)
+  if (cached && Date.now() - cached.createdAt < VAULT_INDEX_TTL) {
+    return cached.files
+  }
+
+  const files = scanVaultFiles(rootURL).catch(error => {
+    vaultFilesCache.delete(rootURL)
+    throw error
+  })
+  vaultFilesCache.set(rootURL, { createdAt: Date.now(), files })
+  return files
+}
+
+async function scanVaultFiles(rootURL: string): Promise<VaultFileEntry[]> {
+  const queue = [rootURL]
+  const visitedDirectories = new Set<string>()
+  const visitedFiles = new Set<string>()
+  const files: VaultFileEntry[] = []
+
+  while (queue.length) {
+    const batch = queue
+      .splice(0, 16)
+      .filter(url => !visitedDirectories.has(url))
+    batch.forEach(url => visitedDirectories.add(url))
+    const results = await Promise.all(
+      batch.map(directoryURL => getDirectoryEntries(directoryURL, rootURL)),
+    )
+
+    results.flat().forEach(entry => {
+      if (entry.isDirectory) {
+        if (!visitedDirectories.has(entry.url)) queue.push(entry.url)
+        return
+      }
+      if (visitedFiles.has(entry.url)) return
+      visitedFiles.add(entry.url)
+      files.push({
+        name: entry.name,
+        url: entry.url,
+        relativePath: getRelativePath(entry.url, rootURL),
+      })
+    })
+  }
+
+  return files.sort((left, right) =>
+    left.relativePath.localeCompare(right.relativePath, 'zh-CN', {
+      numeric: true,
+    }),
+  )
+}
+
+function getRelativePath(url: string, rootURL: string): string {
+  const path = decodeURLPath(new URL(url))
+  const rootPath = decodeURLPath(new URL(rootURL))
+  return path.startsWith(rootPath) ? path.slice(rootPath.length) : path
 }
 
 async function resolveWikiLinkTargets(data: any, senderURL?: string) {
