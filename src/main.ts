@@ -109,7 +109,7 @@ function main(data: Data) {
   mdRaw = directoryPage
     ? `# 📁 ${escapeMarkdown(
         getDirectoryName(window.location.href),
-      )}\n\n从左侧文件夹目录选择 Markdown 文件。`
+      )}\n\n从左侧文件夹目录选择文件；Markdown 会在当前窗口渲染，其他格式由浏览器打开。`
     : rawContainer?.textContent
 
   /* render content */

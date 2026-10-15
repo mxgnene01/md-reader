@@ -269,7 +269,6 @@ function parseNativeDirectoryEntries(
       if (isDirectory && (name.startsWith('.') || name === 'node_modules')) {
         continue
       }
-      if (!isDirectory && !isMarkdownFile(name)) continue
       entries.push({ name, url: url.href, isDirectory })
     } catch {
       // Ignore malformed browser-generated rows.

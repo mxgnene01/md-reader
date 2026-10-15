@@ -1,15 +1,6 @@
 import className from '@/config/class-name'
 import { FOLDER_SORT_ORDERS, type FolderSortOrder } from '@/core/data'
 
-const MARKDOWN_EXTENSIONS = new Set([
-  'md',
-  'mdx',
-  'mdc',
-  'mkd',
-  'markdown',
-  'txt',
-])
-
 const FOLDER_SORT_OPTIONS: Array<{
   value: FolderSortOrder
   label: string
@@ -176,7 +167,6 @@ export function parseDirectoryEntries(
       ? relativePath.slice(0, -1)
       : relativePath
     if (!comparablePath || comparablePath.includes('/')) return
-    if (!isDirectory && !isMarkdownFile(comparablePath)) return
     const knownEntry = seen.get(target.href)
     if (knownEntry) {
       if (
@@ -298,7 +288,7 @@ export async function renderFolderBrowser({
   searchInput.placeholder = '搜索文件… (⌘K)'
   searchInput.autocomplete = 'off'
   searchInput.spellcheck = false
-  searchInput.setAttribute('aria-label', '搜索根目录中的 Markdown 文件')
+  searchInput.setAttribute('aria-label', '搜索根目录中的文件')
   searchInput.setAttribute('aria-autocomplete', 'list')
   searchInput.setAttribute('aria-expanded', 'false')
   search.append(searchInput)
@@ -399,7 +389,7 @@ export async function renderFolderBrowser({
         ? `${matches.length} 个结果${
             matches.length > shown ? `，显示前 ${shown} 个` : ''
           }`
-        : '没有匹配的 Markdown 文件'
+        : '没有匹配的文件'
       searchResults.hidden = !matches.length
       if (matches.length) selectSearchResult(0)
     } catch (error) {
@@ -470,7 +460,7 @@ export async function renderFolderBrowser({
           ?.scrollIntoView({ block: 'nearest' })
       })
       if (!entries.length) {
-        status.textContent = '没有 Markdown 文件'
+        status.textContent = '文件夹为空'
         container.insertBefore(status, tree)
       }
     }
@@ -520,7 +510,7 @@ async function renderEntries(
             if (!childEntries.length) {
               const empty = document.createElement('li')
               empty.className = className.FOLDER_EMPTY
-              empty.textContent = '没有 Markdown 文件'
+              empty.textContent = '文件夹为空'
               children.append(empty)
             }
           } catch (error) {
@@ -706,11 +696,6 @@ function stripMarkdownExtension(name: string): string {
 function getParentPath(relativePath: string): string {
   const separator = relativePath.lastIndexOf('/')
   return separator < 0 ? '/' : relativePath.slice(0, separator) || '/'
-}
-
-function isMarkdownFile(path: string): boolean {
-  const extension = path.split('.').pop()?.toLowerCase()
-  return MARKDOWN_EXTENSIONS.has(extension)
 }
 
 function decodeName(name: string): string {
