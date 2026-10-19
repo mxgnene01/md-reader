@@ -6,10 +6,11 @@
   import Switch from '@smui/switch'
   import FormField from '@smui/form-field'
   import Select, { Option } from '@smui/select'
-  import Chip, { Set, Text } from '@smui/chips'
+  import Chip, { Set as ChipSet, Text } from '@smui/chips'
   import MD_PLUGINS from '@/config/md-plugins'
   import PAGE_THEMES from '@/config/page-themes'
   import { getDefaultData, type Data } from '@/core/data'
+  import { getConfiguredFolderRootPaths } from '@/core/folder-roots'
   import pkg from '../../../package.json'
   import i18n from '@/config/i18n'
 
@@ -48,14 +49,9 @@
   }
 
   function saveFolderRootPaths(paths: string[]) {
-    const seen = new Set<string>()
-    const folderRootPaths = paths.reduce<string[]>((items, value) => {
-      const path = value.trim()
-      if (!path || seen.has(path)) return items
-      seen.add(path)
-      items.push(path)
-      return items
-    }, [])
+    const folderRootPaths = getConfiguredFolderRootPaths({
+      folderRootPaths: paths,
+    })
     data = { ...data, folderRootPaths }
     updateConfig('folderRootPaths', folderRootPaths)
   }
@@ -171,7 +167,7 @@
 
     <div class="form-item">
       <div class="label-item">{localize('label_md-plugins')}:</div>
-      <Set
+      <ChipSet
         let:chip
         bind:selected={data.mdPlugins}
         chips={MD_PLUGINS}
@@ -185,7 +181,7 @@
             data.enable && updateConfig('mdPlugins', data.mdPlugins)}
           ><Text>{localize(chip)}</Text></Chip
         >
-      </Set>
+      </ChipSet>
     </div>
 
     <div class="form-item">
