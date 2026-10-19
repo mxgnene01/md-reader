@@ -31,6 +31,13 @@ import {
 import codeIcon from '@/images/icon_code.svg'
 import sideIcon from '@/images/icon_side.svg'
 import goTopIcon from '@/images/icon_go_top.svg'
+import {
+  DEFAULT_SIDE_WIDTH,
+  MAX_SIDE_WIDTH,
+  MIN_SIDE_WIDTH,
+  clampSideWidthForViewport,
+  resolveSideWidth,
+} from '@/core/side-width'
 import '@/style/index.less'
 
 function main(data: Data) {
@@ -43,6 +50,7 @@ function main(data: Data) {
     configuredRootURLs,
   )
   const useConfiguredRoot = Boolean(configuredRootURL)
+  applySideWidth(resolveSideWidth(configData.sideWidth))
   const directoryHTML = directoryPage
     ? document.documentElement.outerHTML
     : null
@@ -344,9 +352,22 @@ function main(data: Data) {
     [sideExpandBtn, rawToggleBtn, goTopBtn].filter(Boolean),
   )
 
+  const sideWidthResizer = new Ele<HTMLElement>('div', {
+    className: className.SIDE_WIDTH_RESIZER,
+    role: 'separator',
+    tabindex: '0',
+    title: '拖动调整侧边栏宽度；双击恢复默认',
+    'aria-label': '调整侧边栏宽度',
+    'aria-orientation': 'vertical',
+  })
+
   /* mount elements */
-  lifecycle.mount([buttonWrap, mdBody, mdSide])
+  lifecycle.mount([buttonWrap, mdBody, mdSide, sideWidthResizer])
   updateAnchorPosition()
+  setupSideWidthResize(sideWidthResizer.ele, configData.sideWidth, width => {
+    configData.sideWidth = width
+    void storage.set('sideWidth', width)
+  })
 
   darkMediaQuery.addEventListener('change', (e: MediaQueryListEvent) => {
     if (configData.pageTheme === 'auto') {
@@ -603,6 +624,78 @@ function setupFolderPaneResize(
 function clampFolderPaneRatio(value: number): number {
   if (!Number.isFinite(value)) return DEFAULT_FOLDER_PANE_RATIO
   return Math.min(Math.max(value, MIN_FOLDER_PANE_RATIO), MAX_FOLDER_PANE_RATIO)
+}
+
+function applySideWidth(width: number) {
+  document.documentElement.style.setProperty(
+    '--side-pane-width',
+    `${clampSideWidthForViewport(width)}px`,
+  )
+}
+
+const SIDE_WIDTH_STEP = 24
+
+function setupSideWidthResize(
+  resizer: HTMLElement,
+  initialWidth: number,
+  onChange: (width: number) => void,
+) {
+  let width = resolveSideWidth(initialWidth)
+  let dragging = false
+
+  const applyWidth = () => {
+    applySideWidth(width)
+    resizer.setAttribute('aria-valuenow', String(Math.round(width)))
+  }
+
+  const setWidth = (value: number) => {
+    width = resolveSideWidth(value)
+    applyWidth()
+  }
+
+  const finishResize = () => {
+    if (!dragging) return
+    dragging = false
+    document.body.classList.remove(className.SIDE_WIDTH_RESIZING)
+    document.removeEventListener('pointermove', onPointerMove)
+    document.removeEventListener('pointerup', finishResize)
+    document.removeEventListener('pointercancel', finishResize)
+    onChange(width)
+  }
+
+  const onPointerMove = (event: PointerEvent) => {
+    if (!dragging) return
+    // The sidebar is fixed to the left edge, so the pointer x is the width.
+    setWidth(event.clientX)
+  }
+
+  resizer.addEventListener('pointerdown', (event: PointerEvent) => {
+    if (event.button !== 0) return
+    event.preventDefault()
+    dragging = true
+    document.body.classList.add(className.SIDE_WIDTH_RESIZING)
+    document.addEventListener('pointermove', onPointerMove)
+    document.addEventListener('pointerup', finishResize)
+    document.addEventListener('pointercancel', finishResize)
+  })
+  resizer.addEventListener('keydown', (event: KeyboardEvent) => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+    event.preventDefault()
+    setWidth(
+      width + (event.key === 'ArrowLeft' ? -SIDE_WIDTH_STEP : SIDE_WIDTH_STEP),
+    )
+    onChange(width)
+  })
+  resizer.addEventListener('dblclick', () => {
+    setWidth(DEFAULT_SIDE_WIDTH)
+    onChange(width)
+  })
+  // Keep the article readable when the window gets narrower than the setting.
+  window.addEventListener('resize', applyWidth)
+
+  resizer.setAttribute('aria-valuemin', String(MIN_SIDE_WIDTH))
+  resizer.setAttribute('aria-valuemax', String(MAX_SIDE_WIDTH))
+  applyWidth()
 }
 
 storage.get().then(main)

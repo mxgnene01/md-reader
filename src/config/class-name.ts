@@ -35,11 +35,13 @@ export default {
   BUTTON_WRAP_ELE: p`button-wrap`,
   CODE_TOGGLE_BTN: p`btn--code-toggle`,
   SIDE_EXPAND_BTN: p`btn--side-expand`,
+  SIDE_WIDTH_RESIZER: p`side-width-resizer`,
   GO_TOP_BTN: p`btn--go-top`,
   COPY_BTN: p`btn--copy`,
   SIDE_COLLAPSED: 'side-collapsed',
   SIDE_EXPANDED: 'side-expanded',
   SIDE_RESIZING: 'side-resizing',
+  SIDE_WIDTH_RESIZING: 'side-width-resizing',
   MODAL: p`modal`,
   ZOOM_IMAGE: p`zoom-image`,
 }
