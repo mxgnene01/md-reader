@@ -3,7 +3,6 @@ import PAGE_THEMES from '@/config/page-themes'
 import i18n from '@/config/i18n'
 import { getConfiguredFolderRootPaths } from '@/core/folder-roots'
 import { resolveHiddenItems } from '@/core/hidden-items'
-import { resolveSideWidth } from '@/core/side-width'
 
 export const FOLDER_SORT_ORDERS = [
   'name-asc',
@@ -29,8 +28,6 @@ export interface Data {
   folderSortOrder?: FolderSortOrder
   /** `|`-separated names or globs hidden from the folder browser. */
   folderHiddenItems?: string
-  /** Sidebar width in px, set by dragging the divider. */
-  sideWidth?: number
 }
 
 export function getDefaultData(mergeData: Data = {}): Data {
@@ -47,6 +44,5 @@ export function getDefaultData(mergeData: Data = {}): Data {
     ...mergeData,
     folderRootPaths: getConfiguredFolderRootPaths(mergeData),
     folderHiddenItems: resolveHiddenItems(mergeData.folderHiddenItems),
-    sideWidth: resolveSideWidth(mergeData.sideWidth),
   }
 }
