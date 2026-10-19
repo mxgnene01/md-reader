@@ -8,11 +8,11 @@
 2. 开启“开发者模式”。
 3. 如果商店版 Markdown Reader 仍在运行，先将它停用，避免两个内容脚本同时处理 Markdown 页面。
 4. 点击“加载已解压的扩展程序”。
-5. 选择 `/Users/bytedance/mxg/work/md-reader/extension`（软链）或 `/Users/bytedance/mxg/go/src/github.com/mxgnene01/md-reader/extension`（真实路径），**二选一，只加载一份**。
+5. 选择 `/Users/bytedance/mxg/work/md-reader/extension`（软链）或 `/Users/bytedance/mxg/go/src/github.com/mxgnene01/md-reader/extension`（真实路径），两条路径等价。
 6. 打开 `Markdown Reader Local` 的“详情”，开启“允许访问文件网址”。
 7. 点击扩展图标，在“本地目录根路径”中添加一个或多个绝对路径，例如 `/Users/用户名/Obsidian` 和 `/Users/用户名/work/llm-wiki-knowledge`。
 
-> 扩展 ID 由加载路径决定，设置也存在各自 ID 下。软链路径和真实路径会被 Chrome 当成两个不同扩展：同时加载会出现两份内容脚本，且两边的设置互不相通，看起来就像“配置丢了”。重新加载扩展时也用同一个路径，不要在 `chrome://extensions/` 里换路径重加。
+> 扩展 ID 由 `src/manifest.json` 的 `key` 固定为 `eiebnllbajajagobnigmdpobiigddkfh`：加载哪条路径、删除后重加、换目录都不会再换 ID，设置始终跟着同一个 ID。不要删掉这个 `key`，否则 ID 会退回“按路径计算”，重加扩展就会丢配置。对应的私钥 `extension.pem` 只在打签名 crx 时才用得到，已在 `.gitignore` 中。
 
 ## 使用
 

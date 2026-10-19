@@ -6,6 +6,7 @@
   "manifest_version": 3,
   "description": "__MSG_ext_desc__",
   "default_locale": "en",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqOBwGHxzZ4351I8IUU8joYlILwAYiq0zCdh/WOZ6MCl/tmt7FNoBmBhocytq2rZ0WcE2Ws/X6Q5sY7XE1+9VGcHdHKxkrx5Wv7NLg/GRZgVchPXAZFm1Ie5vUVx8KlIqd7XaLcfbjTn148+GMQRuFeX6rBcK/Tm5M02OOge4ka5ykVBGa7jQOnhq+LkZyfbmVQ+IhlpZWy8GIwpXiX9Q36jS0qZOE3dhTka9BeAgutst2cm5Qpt2NKOATXOSnzMxJhUrWNbVPhzYGYfEbvKGFb4jhnWwjzGSXHIjPj4JpXnJxklXC9PDUK4VdSeWjzisbWow397zbDbohJvl1limXQIDAQAB",
   "icons": {
     "16": "images/logo-stroke.png",
     "32": "images/logo-stroke.png",
