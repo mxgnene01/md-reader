@@ -10,12 +10,12 @@ import { getDefaultData, type Data } from '@/core/data'
 import { mdRender, type MdOptions } from '@/core/markdown'
 import { resolveWikiLink, resolveWikiLinks } from '@/core/wiki-link'
 import {
+  findMatchingFolderRootURL,
   getDirectoryName,
   getParentDirectoryURL,
   isSameLocalURL,
   isLocalDirectoryPage,
-  isURLWithinRoot,
-  normalizeFolderRootURL,
+  normalizeFolderRootURLs,
   renderFolderBrowser,
 } from '@/core/folder'
 import {
@@ -36,11 +36,12 @@ function main(data: Data) {
   const configData = getDefaultData(data)
   const directoryPage = isLocalDirectoryPage()
   const localPage = window.location.protocol === 'file:'
-  const configuredRootURL = normalizeFolderRootURL(configData.folderRootPath)
-  const useConfiguredRoot = Boolean(
-    configuredRootURL &&
-      isURLWithinRoot(window.location.href, configuredRootURL),
+  const configuredRootURLs = normalizeFolderRootURLs(configData.folderRootPaths)
+  const configuredRootURL = findMatchingFolderRootURL(
+    window.location.href,
+    configuredRootURLs,
   )
+  const useConfiguredRoot = Boolean(configuredRootURL)
   const directoryHTML = directoryPage
     ? document.documentElement.outerHTML
     : null
@@ -203,9 +204,11 @@ function main(data: Data) {
       ? window.location.href
       : getParentDirectoryURL(window.location.href)
     const rootURL = useConfiguredRoot ? configuredRootURL : fallbackRootURL
+    const rootURLs = Array.from(new Set([rootURL, ...configuredRootURLs]))
     void renderFolderBrowser({
       container: folderBrowser.ele,
       rootURL,
+      rootURLs,
       currentURL: window.location.href,
       initialHTML:
         directoryPage && isSameLocalURL(rootURL, window.location.href)
@@ -216,6 +219,9 @@ function main(data: Data) {
       onSortOrderChange: sortOrder => {
         configData.folderSortOrder = sortOrder
         void storage.set('folderSortOrder', sortOrder)
+      },
+      onRootURLChange: nextRootURL => {
+        window.location.href = nextRootURL
       },
       onQuickOpen: () => {
         if (window.innerWidth <= 960) {

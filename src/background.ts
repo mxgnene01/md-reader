@@ -413,6 +413,7 @@ const actionMap = {
   mdPlugins: 'updateMdPlugins',
   pageTheme: 'updatePageTheme',
   hiddenSide: 'toggleSide',
+  folderRootPaths: 'reload',
   folderRootPath: 'reload',
 }
 

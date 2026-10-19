@@ -11,6 +11,7 @@ export default {
   FOLDER_RESIZER: p`folder-resizer`,
   FOLDER_HEADER: p`folder-header`,
   FOLDER_ROOT: p`folder-root`,
+  FOLDER_ROOT_SELECT: p`folder-root-select`,
   FOLDER_PARENT: p`folder-parent`,
   FOLDER_SORT: p`folder-sort`,
   FOLDER_SEARCH: p`folder-search`,

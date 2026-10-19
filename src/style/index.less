@@ -125,6 +125,23 @@ body.md-reader {
         text-overflow: ellipsis;
         white-space: nowrap;
       }
+      .md-reader__folder-root-select {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        padding: 3px 5px;
+        border: 1px solid var(--color-side-border);
+        border-radius: 5px;
+        outline: none;
+        color: var(--color-text-primary);
+        background: var(--color-side-bg);
+        font: inherit;
+        font-size: 12px;
+        text-overflow: ellipsis;
+        &:focus {
+          border-color: var(--color-primary);
+        }
+      }
       .md-reader__folder-parent {
         flex: none;
         padding: 2px 6px;

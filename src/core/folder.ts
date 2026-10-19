@@ -1,5 +1,12 @@
 import className from '@/config/class-name'
 import { FOLDER_SORT_ORDERS, type FolderSortOrder } from '@/core/data'
+import { isURLWithinRoot } from '@/core/folder-roots'
+export {
+  findMatchingFolderRootURL,
+  isURLWithinRoot,
+  normalizeFolderRootURL,
+  normalizeFolderRootURLs,
+} from '@/core/folder-roots'
 
 const FOLDER_SORT_OPTIONS: Array<{
   value: FolderSortOrder
@@ -46,11 +53,13 @@ const MAX_SEARCH_RESULTS = 50
 interface FolderBrowserOptions {
   container: HTMLElement
   rootURL: string
+  rootURLs?: string[]
   currentURL?: string
   initialHTML?: string
   showParentLink?: boolean
   sortOrder?: FolderSortOrder
   onSortOrderChange?: (sortOrder: FolderSortOrder) => void
+  onRootURLChange?: (rootURL: string) => void
   onQuickOpen?: () => void
 }
 
@@ -68,43 +77,6 @@ export function isLocalDirectoryPage(
 
 export function getParentDirectoryURL(url: string): string {
   return new URL('./', url).href
-}
-
-export function normalizeFolderRootURL(value?: string): string | undefined {
-  const path = value?.trim()
-  if (!path) return undefined
-
-  try {
-    let target = path
-    if (/^[a-z]:[\\/]/i.test(target)) {
-      target = `file:///${target.replace(/\\/g, '/')}`
-    } else if (target.startsWith('/')) {
-      target = `file://${target}`
-    }
-
-    const url = new URL(target)
-    if (url.protocol !== 'file:') return undefined
-    url.hash = ''
-    url.search = ''
-    if (!url.pathname.endsWith('/')) url.pathname += '/'
-    return url.href
-  } catch {
-    return undefined
-  }
-}
-
-export function isURLWithinRoot(url: string, rootURL: string): boolean {
-  try {
-    const target = new URL(url)
-    const root = new URL(rootURL)
-    return (
-      target.protocol === root.protocol &&
-      target.host === root.host &&
-      decodeURLPath(target).startsWith(decodeURLPath(root))
-    )
-  } catch {
-    return false
-  }
 }
 
 export function isSameLocalURL(left: string, right: string): boolean {
@@ -235,11 +207,13 @@ export function parseDirectoryEntries(
 export async function renderFolderBrowser({
   container,
   rootURL,
+  rootURLs = [rootURL],
   currentURL,
   initialHTML,
   showParentLink = true,
   sortOrder = 'name-desc',
   onSortOrderChange,
+  onRootURLChange,
   onQuickOpen,
 }: FolderBrowserOptions): Promise<void> {
   container.replaceChildren()
@@ -252,7 +226,25 @@ export async function renderFolderBrowser({
   rootLink.href = rootURL
   rootLink.className = className.FOLDER_ROOT
   rootLink.title = rootURL
-  rootLink.textContent = `📁 ${getDirectoryName(rootURL)}`
+  rootLink.textContent =
+    rootURLs.length > 1 ? '📁' : `📁 ${getDirectoryName(rootURL)}`
+  if (rootURLs.length > 1) rootLink.style.flex = 'none'
+
+  const rootSelect = document.createElement('select')
+  rootSelect.className = className.FOLDER_ROOT_SELECT
+  rootSelect.setAttribute('aria-label', '切换本地根目录')
+  rootSelect.title = rootURL
+  for (const availableRootURL of rootURLs) {
+    const option = document.createElement('option')
+    option.value = availableRootURL
+    option.textContent = getDirectoryName(availableRootURL)
+    option.title = availableRootURL
+    rootSelect.append(option)
+  }
+  rootSelect.value = rootURL
+  rootSelect.addEventListener('change', () => {
+    onRootURLChange?.(rootSelect.value)
+  })
 
   const parentLink = document.createElement('a')
   parentLink.href = new URL('../', rootURL).href
@@ -277,7 +269,9 @@ export async function renderFolderBrowser({
   updateSortControlTitle(sortControl, activeSortOrder)
   sortControl.append(sortIcon, sortSelect)
 
-  header.append(rootLink, sortControl)
+  header.append(rootLink)
+  if (rootURLs.length > 1) header.append(rootSelect)
+  header.append(sortControl)
   if (showParentLink) header.append(parentLink)
 
   const search = document.createElement('div')

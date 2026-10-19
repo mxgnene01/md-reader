@@ -24,6 +24,7 @@
     "build:manifest": "node ./scripts/manifest.mjs",
     "build:extension": "webpack --config ./build/webpack.prod.js",
     "build:zip": "node ./scripts/zip.mjs",
+    "test": "node --test tests/*.test.mjs",
     "lint": "prettier --write --ignore-unknown",
     "preinstall": "node ./scripts/preinstall.mjs",
     "prepare": "husky install"
