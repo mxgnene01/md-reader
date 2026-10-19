@@ -17,6 +17,7 @@ import {
   isLocalDirectoryPage,
   normalizeFolderRootURLs,
   renderFolderBrowser,
+  type FolderBrowserOptions,
 } from '@/core/folder'
 import {
   getHeads,
@@ -45,9 +46,18 @@ function main(data: Data) {
   const directoryHTML = directoryPage
     ? document.documentElement.outerHTML
     : null
+  let folderBrowserOptions: FolderBrowserOptions = null
   const actions = {
     reload() {
       window.location.reload()
+    },
+    updateFolderHiddenItems() {
+      if (!folderBrowserOptions) return
+      folderBrowserOptions = {
+        ...folderBrowserOptions,
+        hiddenItems: configData.folderHiddenItems,
+      }
+      void renderFolderBrowser(folderBrowserOptions)
     },
     updateMdPlugins() {
       reloading = true
@@ -205,7 +215,7 @@ function main(data: Data) {
       : getParentDirectoryURL(window.location.href)
     const rootURL = useConfiguredRoot ? configuredRootURL : fallbackRootURL
     const rootURLs = Array.from(new Set([rootURL, ...configuredRootURLs]))
-    void renderFolderBrowser({
+    folderBrowserOptions = {
       container: folderBrowser.ele,
       rootURL,
       rootURLs,
@@ -216,6 +226,7 @@ function main(data: Data) {
           : undefined,
       showParentLink: !useConfiguredRoot,
       sortOrder: configData.folderSortOrder,
+      hiddenItems: configData.folderHiddenItems,
       onSortOrderChange: sortOrder => {
         configData.folderSortOrder = sortOrder
         void storage.set('folderSortOrder', sortOrder)
@@ -232,7 +243,8 @@ function main(data: Data) {
           void storage.set('hiddenSide', false)
         }
       },
-    })
+    }
+    void renderFolderBrowser(folderBrowserOptions)
   }
   mdSide.append(mdOutline)
   let idCache: { [content: string]: number } = Object.create(null)

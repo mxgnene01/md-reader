@@ -166,6 +166,20 @@
     </div>
 
     <div class="form-item">
+      <div class="label-item">{localize('label_folder-hidden-items')}:</div>
+      <input
+        class="path-input"
+        disabled={!data.enable}
+        bind:value={data.folderHiddenItems}
+        placeholder={localize('placeholder_folder-hidden-items')}
+        aria-label={localize('label_folder-hidden-items')}
+        on:change={() =>
+          updateConfig('folderHiddenItems', data.folderHiddenItems)}
+      />
+      <div class="help-item">{localize('help_folder-hidden-items')}</div>
+    </div>
+
+    <div class="form-item">
       <div class="label-item">{localize('label_md-plugins')}:</div>
       <ChipSet
         let:chip

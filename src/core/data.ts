@@ -2,6 +2,7 @@ import MD_PLUGINS from '@/config/md-plugins'
 import PAGE_THEMES from '@/config/page-themes'
 import i18n from '@/config/i18n'
 import { getConfiguredFolderRootPaths } from '@/core/folder-roots'
+import { resolveHiddenItems } from '@/core/hidden-items'
 
 export const FOLDER_SORT_ORDERS = [
   'name-asc',
@@ -25,6 +26,8 @@ export interface Data {
   /** Legacy single-root setting. Kept only for automatic migration. */
   folderRootPath?: string
   folderSortOrder?: FolderSortOrder
+  /** `|`-separated names or globs hidden from the folder browser. */
+  folderHiddenItems?: string
 }
 
 export function getDefaultData(mergeData: Data = {}): Data {
@@ -40,5 +43,6 @@ export function getDefaultData(mergeData: Data = {}): Data {
     pageTheme: PAGE_THEMES[0],
     ...mergeData,
     folderRootPaths: getConfiguredFolderRootPaths(mergeData),
+    folderHiddenItems: resolveHiddenItems(mergeData.folderHiddenItems),
   }
 }

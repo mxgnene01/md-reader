@@ -1,5 +1,6 @@
 import storage from '@/core/storage'
 import commands from '@/core/commands'
+import { createHiddenItemMatcher } from '@/core/hidden-items'
 
 const MARKDOWN_EXTENSIONS = new Set([
   'md',
@@ -73,27 +74,39 @@ async function listVaultFiles(data: any, senderURL?: string) {
     if (!rootURL || !senderURL || !isURLWithinRoot(senderURL, rootURL)) {
       throw new Error('File search must stay inside the local root.')
     }
-    return { ok: true, files: await getVaultFiles(rootURL) }
+    const hiddenItems =
+      typeof data?.hiddenItems === 'string' ? data.hiddenItems : undefined
+    return { ok: true, files: await getVaultFiles(rootURL, hiddenItems) }
   } catch (error) {
     return { ok: false, error: error.message || String(error) }
   }
 }
 
-function getVaultFiles(rootURL: string): Promise<VaultFileEntry[]> {
-  const cached = vaultFilesCache.get(rootURL)
+function getVaultFiles(
+  rootURL: string,
+  hiddenItems?: string,
+): Promise<VaultFileEntry[]> {
+  // The index is filtered while scanning, so the cache key must include the
+  // active hidden-item setting.
+  const cacheKey = `${rootURL}\u0000${hiddenItems ?? ''}`
+  const cached = vaultFilesCache.get(cacheKey)
   if (cached && Date.now() - cached.createdAt < VAULT_INDEX_TTL) {
     return cached.files
   }
 
-  const files = scanVaultFiles(rootURL).catch(error => {
-    vaultFilesCache.delete(rootURL)
+  const files = scanVaultFiles(rootURL, hiddenItems).catch(error => {
+    vaultFilesCache.delete(cacheKey)
     throw error
   })
-  vaultFilesCache.set(rootURL, { createdAt: Date.now(), files })
+  vaultFilesCache.set(cacheKey, { createdAt: Date.now(), files })
   return files
 }
 
-async function scanVaultFiles(rootURL: string): Promise<VaultFileEntry[]> {
+async function scanVaultFiles(
+  rootURL: string,
+  hiddenItems?: string,
+): Promise<VaultFileEntry[]> {
+  const isHiddenItem = createHiddenItemMatcher(hiddenItems)
   const queue = [rootURL]
   const visitedDirectories = new Set<string>()
   const visitedFiles = new Set<string>()
@@ -109,6 +122,7 @@ async function scanVaultFiles(rootURL: string): Promise<VaultFileEntry[]> {
     )
 
     results.flat().forEach(entry => {
+      if (isHiddenItem(entry.name)) return
       if (entry.isDirectory) {
         if (!visitedDirectories.has(entry.url)) queue.push(entry.url)
         return
@@ -415,6 +429,7 @@ const actionMap = {
   hiddenSide: 'toggleSide',
   folderRootPaths: 'reload',
   folderRootPath: 'reload',
+  folderHiddenItems: 'updateFolderHiddenItems',
 }
 
 function updatePage(key: keyof typeof actionMap, value?: any) {

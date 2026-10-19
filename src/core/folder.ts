@@ -1,5 +1,6 @@
 import className from '@/config/class-name'
 import { FOLDER_SORT_ORDERS, type FolderSortOrder } from '@/core/data'
+import { createHiddenItemMatcher } from '@/core/hidden-items'
 import { isURLWithinRoot } from '@/core/folder-roots'
 export {
   findMatchingFolderRootURL,
@@ -50,7 +51,7 @@ interface SearchResult {
 
 const MAX_SEARCH_RESULTS = 50
 
-interface FolderBrowserOptions {
+export interface FolderBrowserOptions {
   container: HTMLElement
   rootURL: string
   rootURLs?: string[]
@@ -58,6 +59,7 @@ interface FolderBrowserOptions {
   initialHTML?: string
   showParentLink?: boolean
   sortOrder?: FolderSortOrder
+  hiddenItems?: string
   onSortOrderChange?: (sortOrder: FolderSortOrder) => void
   onRootURLChange?: (rootURL: string) => void
   onQuickOpen?: () => void
@@ -102,6 +104,7 @@ export function parseDirectoryEntries(
   html: string,
   directoryURL: string,
   sortOrder: FolderSortOrder = 'name-desc',
+  hiddenItems?: string,
 ): FolderEntry[] {
   const base = new URL(directoryURL)
   const basePath = base.pathname.endsWith('/')
@@ -110,6 +113,7 @@ export function parseDirectoryEntries(
   const parsed = new DOMParser().parseFromString(html, 'text/html')
   const seen = new Map<string, FolderEntry>()
   const entries: FolderEntry[] = []
+  const isHiddenItem = createHiddenItemMatcher(hiddenItems)
 
   const addEntry = (
     href: string,
@@ -154,6 +158,7 @@ export function parseDirectoryEntries(
     if (isDirectory && (name.startsWith('.') || name === 'node_modules')) {
       return
     }
+    if (isHiddenItem(name)) return
 
     const entry = {
       name,
@@ -212,6 +217,7 @@ export async function renderFolderBrowser({
   initialHTML,
   showParentLink = true,
   sortOrder = 'name-desc',
+  hiddenItems,
   onSortOrderChange,
   onRootURLChange,
   onQuickOpen,
@@ -303,7 +309,7 @@ export async function renderFolderBrowser({
   status.textContent = '正在读取文件夹…'
   container.append(header, search, searchStatus, status, tree, searchResults)
 
-  const filesPromise = requestVaultFiles(rootURL)
+  const filesPromise = requestVaultFiles(rootURL, hiddenItems)
   let activeSearchIndex = 0
   let searchVersion = 0
 
@@ -441,9 +447,20 @@ export async function renderFolderBrowser({
     let renderVersion = 0
     const renderTree = async () => {
       const version = ++renderVersion
-      const entries = parseDirectoryEntries(html, rootURL, activeSortOrder)
+      const entries = parseDirectoryEntries(
+        html,
+        rootURL,
+        activeSortOrder,
+        hiddenItems,
+      )
       const nextTree = document.createElement('ul')
-      await renderEntries(nextTree, entries, currentURL, activeSortOrder)
+      await renderEntries(
+        nextTree,
+        entries,
+        currentURL,
+        activeSortOrder,
+        hiddenItems,
+      )
       if (version !== renderVersion) return
 
       tree.replaceChildren(...Array.from(nextTree.childNodes))
@@ -477,6 +494,7 @@ async function renderEntries(
   entries: FolderEntry[],
   currentURL?: string,
   sortOrder: FolderSortOrder = 'name-desc',
+  hiddenItems?: string,
 ): Promise<void> {
   for (const entry of entries) {
     const item = document.createElement('li')
@@ -499,8 +517,15 @@ async function renderEntries(
               html,
               entry.url,
               sortOrder,
+              hiddenItems,
             )
-            await renderEntries(children, childEntries, currentURL, sortOrder)
+            await renderEntries(
+              children,
+              childEntries,
+              currentURL,
+              sortOrder,
+              hiddenItems,
+            )
             if (!childEntries.length) {
               const empty = document.createElement('li')
               empty.className = className.FOLDER_EMPTY
@@ -602,10 +627,13 @@ function fetchLocalText(url: string): Promise<string> {
   })
 }
 
-function requestVaultFiles(rootURL: string): Promise<VaultFileEntry[]> {
+function requestVaultFiles(
+  rootURL: string,
+  hiddenItems?: string,
+): Promise<VaultFileEntry[]> {
   return new Promise((resolve, reject) => {
     chrome.runtime.sendMessage(
-      { action: 'listVaultFiles', data: { rootURL } },
+      { action: 'listVaultFiles', data: { rootURL, hiddenItems } },
       (response: ListVaultFilesResponse) => {
         if (chrome.runtime.lastError) {
           reject(new Error(chrome.runtime.lastError.message))
