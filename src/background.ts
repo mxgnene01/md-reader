@@ -76,7 +76,10 @@ async function listVaultFiles(data: any, senderURL?: string) {
     }
     const hiddenItems =
       typeof data?.hiddenItems === 'string' ? data.hiddenItems : undefined
-    return { ok: true, files: await getVaultFiles(rootURL, hiddenItems) }
+    return {
+      ok: true,
+      files: await getVaultFiles(rootURL, hiddenItems, data?.refresh === true),
+    }
   } catch (error) {
     return { ok: false, error: error.message || String(error) }
   }
@@ -85,10 +88,12 @@ async function listVaultFiles(data: any, senderURL?: string) {
 function getVaultFiles(
   rootURL: string,
   hiddenItems?: string,
+  refresh = false,
 ): Promise<VaultFileEntry[]> {
   // The index is filtered while scanning, so the cache key must include the
   // active hidden-item setting.
   const cacheKey = `${rootURL}\u0000${hiddenItems ?? ''}`
+  if (refresh) clearVaultCaches(rootURL)
   const cached = vaultFilesCache.get(cacheKey)
   if (cached && Date.now() - cached.createdAt < VAULT_INDEX_TTL) {
     return cached.files
@@ -100,6 +105,19 @@ function getVaultFiles(
   })
   vaultFilesCache.set(cacheKey, { createdAt: Date.now(), files })
   return files
+}
+
+function clearVaultCaches(rootURL: string) {
+  for (const directoryURL of directoryEntriesCache.keys()) {
+    if (isURLWithinRoot(directoryURL, rootURL)) {
+      directoryEntriesCache.delete(directoryURL)
+    }
+  }
+  for (const cacheKey of vaultFilesCache.keys()) {
+    if (cacheKey.startsWith(`${rootURL}\u0000`)) {
+      vaultFilesCache.delete(cacheKey)
+    }
+  }
 }
 
 async function scanVaultFiles(

@@ -60,6 +60,7 @@ export interface FolderBrowserOptions {
   showParentLink?: boolean
   sortOrder?: FolderSortOrder
   hiddenItems?: string
+  refreshIndex?: boolean
   onSortOrderChange?: (sortOrder: FolderSortOrder) => void
   onRootURLChange?: (rootURL: string) => void
   onQuickOpen?: () => void
@@ -209,19 +210,23 @@ export function parseDirectoryEntries(
   )
 }
 
-export async function renderFolderBrowser({
-  container,
-  rootURL,
-  rootURLs = [rootURL],
-  currentURL,
-  initialHTML,
-  showParentLink = true,
-  sortOrder = 'name-desc',
-  hiddenItems,
-  onSortOrderChange,
-  onRootURLChange,
-  onQuickOpen,
-}: FolderBrowserOptions): Promise<void> {
+export async function renderFolderBrowser(
+  options: FolderBrowserOptions,
+): Promise<void> {
+  const {
+    container,
+    rootURL,
+    rootURLs = [rootURL],
+    currentURL,
+    initialHTML,
+    showParentLink = true,
+    sortOrder = 'name-desc',
+    hiddenItems,
+    refreshIndex = false,
+    onSortOrderChange,
+    onRootURLChange,
+    onQuickOpen,
+  } = options
   container.replaceChildren()
   let activeSortOrder = normalizeFolderSortOrder(sortOrder)
 
@@ -275,9 +280,25 @@ export async function renderFolderBrowser({
   updateSortControlTitle(sortControl, activeSortOrder)
   sortControl.append(sortIcon, sortSelect)
 
+  const refreshButton = document.createElement('button')
+  refreshButton.type = 'button'
+  refreshButton.className = className.FOLDER_REFRESH
+  refreshButton.title = '刷新目录'
+  refreshButton.setAttribute('aria-label', '刷新目录')
+  refreshButton.textContent = '↻'
+  refreshButton.addEventListener('click', () => {
+    void renderFolderBrowser({
+      ...options,
+      initialHTML: undefined,
+      refreshIndex: true,
+      sortOrder: activeSortOrder,
+    })
+  })
+
   header.append(rootLink)
   if (rootURLs.length > 1) header.append(rootSelect)
   header.append(sortControl)
+  header.append(refreshButton)
   if (showParentLink) header.append(parentLink)
 
   const search = document.createElement('div')
@@ -309,7 +330,7 @@ export async function renderFolderBrowser({
   status.textContent = '正在读取文件夹…'
   container.append(header, search, searchStatus, status, tree, searchResults)
 
-  const filesPromise = requestVaultFiles(rootURL, hiddenItems)
+  const filesPromise = requestVaultFiles(rootURL, hiddenItems, refreshIndex)
   let activeSearchIndex = 0
   let searchVersion = 0
 
@@ -630,10 +651,11 @@ function fetchLocalText(url: string): Promise<string> {
 function requestVaultFiles(
   rootURL: string,
   hiddenItems?: string,
+  refresh = false,
 ): Promise<VaultFileEntry[]> {
   return new Promise((resolve, reject) => {
     chrome.runtime.sendMessage(
-      { action: 'listVaultFiles', data: { rootURL, hiddenItems } },
+      { action: 'listVaultFiles', data: { rootURL, hiddenItems, refresh } },
       (response: ListVaultFilesResponse) => {
         if (chrome.runtime.lastError) {
           reject(new Error(chrome.runtime.lastError.message))

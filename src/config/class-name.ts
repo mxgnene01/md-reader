@@ -14,6 +14,7 @@ export default {
   FOLDER_ROOT_SELECT: p`folder-root-select`,
   FOLDER_PARENT: p`folder-parent`,
   FOLDER_SORT: p`folder-sort`,
+  FOLDER_REFRESH: p`folder-refresh`,
   FOLDER_SEARCH: p`folder-search`,
   FOLDER_SEARCH_INPUT: p`folder-search-input`,
   FOLDER_SEARCH_STATUS: p`folder-search-status`,
