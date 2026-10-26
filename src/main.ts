@@ -282,11 +282,31 @@ function main(data: Data) {
     'button',
     {
       className: [className.MD_BUTTON, className.SIDE_EXPAND_BTN],
-      title: 'Expand side',
+      title: '显示 / 隐藏目录栏（Command + ]）',
     },
     svg(sideIcon),
   )
-  sideExpandBtn.on('click', () => {
+  sideExpandBtn.on('click', requestToggleSide)
+  document.addEventListener(
+    'keydown',
+    (event: KeyboardEvent) => {
+      if (
+        !event.metaKey ||
+        event.ctrlKey ||
+        event.altKey ||
+        event.shiftKey ||
+        event.isComposing ||
+        (event.key !== ']' && event.code !== 'BracketRight')
+      ) {
+        return
+      }
+      event.preventDefault()
+      event.stopPropagation()
+      if (!event.repeat) requestToggleSide()
+    },
+    true,
+  )
+  function requestToggleSide() {
     chrome.runtime.sendMessage({
       action: 'storage',
       data: {
@@ -294,7 +314,7 @@ function main(data: Data) {
         value: !configData.hiddenSide,
       },
     })
-  })
+  }
   function onToggleSide() {
     if (window.innerWidth <= 960) {
       const value = document.body.classList.toggle(className.SIDE_EXPANDED)
