@@ -84,10 +84,23 @@ function main(data: Data) {
       onToggleSide()
     },
   }
-  chrome.runtime.onMessage.addListener(({ action, data: { key, value } }) => {
+  chrome.runtime.onMessage.addListener((message, _sender, callback) => {
+    const action = message?.action
+    if (
+      !Object.prototype.hasOwnProperty.call(actions, action) ||
+      !message.data
+    ) {
+      return false
+    }
+
+    const { key, value } = message.data
     const oldValue = configData[key]
     configData[key] = value
-    actions[action]?.(value, oldValue)
+    // Acknowledge delivery before an action can reload the page and close its
+    // message port. The background only needs to know the update was received.
+    callback({ ok: true })
+    actions[action](value, oldValue)
+    return false
   })
 
   if (

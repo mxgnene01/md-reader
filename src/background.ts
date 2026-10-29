@@ -36,8 +36,22 @@ const vaultFilesCache = new Map<
   }
 >()
 
-chrome.runtime.onMessage.addListener(({ action, data }, sender, callback) => {
-  messageHandler(action, data, sender, callback)
+const MESSAGE_ACTIONS = new Set([
+  'storage',
+  'fetch',
+  'fetchUrl',
+  'resolveWikiLinks',
+  'listVaultFiles',
+])
+
+chrome.runtime.onMessage.addListener((message, sender, callback) => {
+  if (!MESSAGE_ACTIONS.has(message?.action)) return false
+
+  messageHandler(message.action, message.data, sender, callback).catch(
+    error => {
+      callback({ ok: false, error: error.message || String(error) })
+    },
+  )
   return true
 })
 
@@ -54,16 +68,16 @@ async function messageHandler(
       callback?.(data)
       break
     case 'fetch':
-      fetchData(sender.url).then(callback)
+      callback?.(await fetchData(sender.url))
       break
     case 'fetchUrl':
-      fetchLocalURL(data?.url, sender.url).then(callback)
+      callback?.(await fetchLocalURL(data?.url, sender.url))
       break
     case 'resolveWikiLinks':
-      resolveWikiLinkTargets(data, sender.url).then(callback)
+      callback?.(await resolveWikiLinkTargets(data, sender.url))
       break
     case 'listVaultFiles':
-      listVaultFiles(data, sender.url).then(callback)
+      callback?.(await listVaultFiles(data, sender.url))
       break
   }
 }
