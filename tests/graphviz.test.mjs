@@ -4,6 +4,43 @@ import MarkdownIt from 'markdown-it'
 import MermaidPlugin from '@md-reader/markdown-it-mermaid'
 
 const loadGraphviz = () => import('../src/core/graphviz.ts')
+const loadMermaidBlock = () => import('../src/plugins/mermaid-block.ts')
+const loadMermaidNormalizer = () =>
+  import('../src/plugins/mermaid-normalize.ts')
+
+test('keeps Mermaid source for asynchronous browser rendering', async () => {
+  const { default: MermaidBlockPlugin, MERMAID_CLASS } =
+    await loadMermaidBlock()
+  const md = new MarkdownIt()
+  md.use(MermaidBlockPlugin, { theme: 'default' })
+
+  const source = 'flowchart LR\n  A[Start] --> B[Done]'
+  const html = md.render(`\`\`\`mermaid\n${source}\n\`\`\``)
+
+  assert.match(html, new RegExp(MERMAID_CLASS))
+  assert.match(html, /flowchart LR/)
+  assert.doesNotMatch(html, /undefined/)
+})
+
+test('quotes non-ASCII Mermaid labels for the bundled Mermaid parser', async () => {
+  const { normalizeMermaidCode } = await loadMermaidNormalizer()
+  const source = [
+    'flowchart LR',
+    '  User[用户目标] --> AI[AI 理解、编排与验收]',
+    '  AI -->|调度原子能力| Python[Python 执行与回读]',
+    '  Env{识别环境} --> DB[(业务数据库：只读)]',
+  ].join('\n')
+
+  assert.equal(
+    normalizeMermaidCode(source),
+    [
+      'flowchart LR',
+      '  User["用户目标"] --> AI["AI 理解、编排与验收"]',
+      '  AI -->|"调度原子能力"| Python["Python 执行与回读"]',
+      '  Env{"识别环境"} --> DB[("业务数据库：只读")]',
+    ].join('\n'),
+  )
+})
 
 test('treats digraph blocks as graphviz diagrams', async () => {
   const { isGraphvizCodeBlock } = await loadGraphviz()

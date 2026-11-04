@@ -11,9 +11,9 @@ import mFootnote from 'markdown-it-footnote'
 import mTaskLists from 'markdown-it-task-lists'
 import mToc from 'markdown-it-table-of-contents'
 import mKatex from '@traptitech/markdown-it-katex'
-import mMermaid from '@md-reader/markdown-it-mermaid'
 import mAlert from '@/plugins/alert'
 import mGraphvizBlock from '@/plugins/graphviz-block'
+import mMermaidBlock from '@/plugins/mermaid-block'
 import mWikiLink from '@/plugins/wiki-link'
 import mMultimdTable from 'markdown-it-multimd-table'
 import MD_PLUGINS from '@/config/md-plugins'
@@ -32,8 +32,8 @@ const PLUGINS: Plugins = {
   Abbr: [mAbbr],
   Katex: [mKatex],
   Mermaid: ({ theme }) => [
-    mMermaid,
-    { theme: theme === 'dark' ? 'dark' : 'default', themeVariables: undefined },
+    mMermaidBlock,
+    { theme: theme === 'dark' ? 'dark' : 'default' },
   ],
   Mark: [mMark],
   Deflist: [mDeflist],

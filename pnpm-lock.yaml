@@ -88,6 +88,9 @@ importers:
       markdown-it-task-lists:
         specifier: ^2.1.1
         version: 2.1.1
+      mermaid:
+        specifier: 9.1.6
+        version: 9.1.6
       svelte:
         specifier: ^3.50.0
         version: 3.50.0
