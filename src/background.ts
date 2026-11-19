@@ -10,7 +10,7 @@ const MARKDOWN_EXTENSIONS = new Set([
   'markdown',
   'txt',
 ])
-const VAULT_INDEX_TTL = 5 * 60 * 1000
+const VAULT_INDEX_TTL = 30 * 60 * 1000
 interface NativeFolderEntry {
   name: string
   url: string
@@ -21,6 +21,16 @@ interface VaultFileEntry {
   url: string
   relativePath: string
 }
+type VaultIndexState = 'building' | 'ready'
+interface VaultFilesCache {
+  createdAt: number
+  completedAt?: number
+  state: VaultIndexState
+  scannedDirectories: number
+  queuedDirectories: number
+  fileCount: number
+  files: Promise<VaultFileEntry[]>
+}
 const directoryEntriesCache = new Map<
   string,
   {
@@ -28,13 +38,7 @@ const directoryEntriesCache = new Map<
     entries: Promise<NativeFolderEntry[]>
   }
 >()
-const vaultFilesCache = new Map<
-  string,
-  {
-    createdAt: number
-    files: Promise<VaultFileEntry[]>
-  }
->()
+const vaultFilesCache = new Map<string, VaultFilesCache>()
 
 const MESSAGE_ACTIONS = new Set([
   'storage',
@@ -42,6 +46,7 @@ const MESSAGE_ACTIONS = new Set([
   'fetchUrl',
   'resolveWikiLinks',
   'listVaultFiles',
+  'getVaultIndexStatus',
 ])
 
 chrome.runtime.onMessage.addListener((message, sender, callback) => {
@@ -79,6 +84,9 @@ async function messageHandler(
     case 'listVaultFiles':
       callback?.(await listVaultFiles(data, sender.url))
       break
+    case 'getVaultIndexStatus':
+      callback?.(await getVaultIndexStatus(data, sender.url))
+      break
   }
 }
 
@@ -99,6 +107,38 @@ async function listVaultFiles(data: any, senderURL?: string) {
   }
 }
 
+async function getVaultIndexStatus(data: any, senderURL?: string) {
+  try {
+    const rootURL = normalizeDirectoryURL(data?.rootURL)
+    if (!rootURL || !senderURL || !isURLWithinRoot(senderURL, rootURL)) {
+      throw new Error('File search must stay inside the local root.')
+    }
+    const hiddenItems =
+      typeof data?.hiddenItems === 'string' ? data.hiddenItems : undefined
+    const cacheKey = `${rootURL}\u0000${hiddenItems ?? ''}`
+    const cached = vaultFilesCache.get(cacheKey)
+    if (!cached) return { ok: true, index: { state: 'empty' } }
+
+    const expired =
+      cached.state === 'ready' &&
+      Date.now() - cached.createdAt >= VAULT_INDEX_TTL
+    return {
+      ok: true,
+      index: {
+        state: expired ? 'expired' : cached.state,
+        createdAt: cached.createdAt,
+        completedAt: cached.completedAt,
+        expiresAt: cached.createdAt + VAULT_INDEX_TTL,
+        scannedDirectories: cached.scannedDirectories,
+        queuedDirectories: cached.queuedDirectories,
+        fileCount: cached.fileCount,
+      },
+    }
+  } catch (error) {
+    return { ok: false, error: error.message || String(error) }
+  }
+}
+
 function getVaultFiles(
   rootURL: string,
   hiddenItems?: string,
@@ -113,36 +153,56 @@ function getVaultFiles(
     return cached.files
   }
 
-  const files = scanVaultFiles(rootURL, hiddenItems).catch(error => {
-    vaultFilesCache.delete(cacheKey)
-    throw error
+  const cache: VaultFilesCache = {
+    createdAt: Date.now(),
+    state: 'building',
+    scannedDirectories: 0,
+    queuedDirectories: 1,
+    fileCount: 0,
+    files: Promise.resolve([]),
+  }
+  cache.files = scanVaultFiles(rootURL, hiddenItems, progress => {
+    cache.scannedDirectories = progress.scannedDirectories
+    cache.queuedDirectories = progress.queuedDirectories
+    cache.fileCount = progress.fileCount
   })
-  vaultFilesCache.set(cacheKey, { createdAt: Date.now(), files })
-  return files
+    .then(files => {
+      cache.state = 'ready'
+      cache.completedAt = Date.now()
+      cache.fileCount = files.length
+      cache.queuedDirectories = 0
+      return files
+    })
+    .catch(error => {
+      vaultFilesCache.delete(cacheKey)
+      throw error
+    })
+  vaultFilesCache.set(cacheKey, cache)
+  return cache.files
 }
 
-function clearVaultCaches(rootURL: string) {
-  for (const directoryURL of directoryEntriesCache.keys()) {
-    if (isURLWithinRoot(directoryURL, rootURL)) {
-      directoryEntriesCache.delete(directoryURL)
-    }
-  }
-  for (const cacheKey of vaultFilesCache.keys()) {
-    if (cacheKey.startsWith(`${rootURL}\u0000`)) {
-      vaultFilesCache.delete(cacheKey)
-    }
-  }
+interface VaultScanProgress {
+  scannedDirectories: number
+  queuedDirectories: number
+  fileCount: number
 }
 
 async function scanVaultFiles(
   rootURL: string,
   hiddenItems?: string,
+  onProgress?: (progress: VaultScanProgress) => void,
 ): Promise<VaultFileEntry[]> {
   const isHiddenItem = createHiddenItemMatcher(hiddenItems)
   const queue = [rootURL]
   const visitedDirectories = new Set<string>()
   const visitedFiles = new Set<string>()
   const files: VaultFileEntry[] = []
+
+  onProgress?.({
+    scannedDirectories: 0,
+    queuedDirectories: queue.length,
+    fileCount: 0,
+  })
 
   while (queue.length) {
     const batch = queue
@@ -167,6 +227,11 @@ async function scanVaultFiles(
         relativePath: getRelativePath(entry.url, rootURL),
       })
     })
+    onProgress?.({
+      scannedDirectories: visitedDirectories.size,
+      queuedDirectories: queue.length,
+      fileCount: files.length,
+    })
   }
 
   return files.sort((left, right) =>
@@ -174,6 +239,19 @@ async function scanVaultFiles(
       numeric: true,
     }),
   )
+}
+
+function clearVaultCaches(rootURL: string) {
+  for (const directoryURL of directoryEntriesCache.keys()) {
+    if (isURLWithinRoot(directoryURL, rootURL)) {
+      directoryEntriesCache.delete(directoryURL)
+    }
+  }
+  for (const cacheKey of vaultFilesCache.keys()) {
+    if (cacheKey.startsWith(`${rootURL}\u0000`)) {
+      vaultFilesCache.delete(cacheKey)
+    }
+  }
 }
 
 function getRelativePath(url: string, rootURL: string): string {

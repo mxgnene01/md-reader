@@ -17,6 +17,7 @@ export default {
   FOLDER_REFRESH: p`folder-refresh`,
   FOLDER_SEARCH: p`folder-search`,
   FOLDER_SEARCH_INPUT: p`folder-search-input`,
+  FOLDER_INDEX_STATUS: p`folder-index-status`,
   FOLDER_SEARCH_STATUS: p`folder-search-status`,
   FOLDER_SEARCH_RESULTS: p`folder-search-results`,
   FOLDER_SEARCH_RESULT: p`folder-search-result`,

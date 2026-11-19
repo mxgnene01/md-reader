@@ -44,6 +44,22 @@ interface ListVaultFilesResponse {
   error?: string
 }
 
+type VaultIndexState = 'empty' | 'building' | 'ready' | 'expired'
+interface VaultIndexStatus {
+  state: VaultIndexState
+  createdAt?: number
+  completedAt?: number
+  expiresAt?: number
+  scannedDirectories?: number
+  queuedDirectories?: number
+  fileCount?: number
+}
+interface VaultIndexStatusResponse {
+  ok: boolean
+  index?: VaultIndexStatus
+  error?: string
+}
+
 interface SearchResult {
   file: VaultFileEntry
   score: number
@@ -319,6 +335,9 @@ export async function renderFolderBrowser(
   const searchStatus = document.createElement('div')
   searchStatus.className = className.FOLDER_SEARCH_STATUS
   searchStatus.hidden = true
+  const indexStatus = document.createElement('div')
+  indexStatus.className = className.FOLDER_INDEX_STATUS
+  indexStatus.textContent = '文件索引：正在建立…'
   const searchResults = document.createElement('ul')
   searchResults.className = className.FOLDER_SEARCH_RESULTS
   searchResults.id = `md-reader-folder-search-${Date.now()}`
@@ -328,11 +347,55 @@ export async function renderFolderBrowser(
   const status = document.createElement('div')
   status.className = className.FOLDER_STATUS
   status.textContent = '正在读取文件夹…'
-  container.append(header, search, searchStatus, status, tree, searchResults)
+  container.append(
+    header,
+    search,
+    indexStatus,
+    searchStatus,
+    status,
+    tree,
+    searchResults,
+  )
 
   const filesPromise = requestVaultFiles(rootURL, hiddenItems, refreshIndex)
   let activeSearchIndex = 0
   let searchVersion = 0
+
+  const renderIndexStatus = (index: VaultIndexStatus) => {
+    const fileCount = (index.fileCount || 0).toLocaleString('zh-CN')
+    if (index.state === 'building') {
+      indexStatus.textContent = `文件索引：构建中，已扫描 ${
+        index.scannedDirectories || 0
+      } 个目录，发现 ${fileCount} 个文件`
+      return
+    }
+    if (index.state === 'ready') {
+      const expiresAt = index.expiresAt
+        ? `，有效至 ${formatIndexTime(index.expiresAt)}`
+        : ''
+      indexStatus.textContent = `文件索引：已缓存 ${fileCount} 个文件${expiresAt}`
+      return
+    }
+    if (index.state === 'expired') {
+      indexStatus.textContent = `文件索引：缓存已过期，共 ${fileCount} 个文件，下一次查询会重建`
+      return
+    }
+    indexStatus.textContent = '文件索引：尚未建立'
+  }
+
+  const pollIndexStatus = async () => {
+    try {
+      const index = await requestVaultIndexStatus(rootURL, hiddenItems)
+      renderIndexStatus(index)
+      if (index.state === 'building') {
+        window.setTimeout(() => void pollIndexStatus(), 250)
+      }
+    } catch {
+      indexStatus.textContent = '文件索引：状态暂不可用'
+    }
+  }
+  void pollIndexStatus()
+  void filesPromise.then(() => pollIndexStatus()).catch(() => undefined)
 
   const hideSearchResults = () => {
     searchVersion += 1
@@ -669,6 +732,35 @@ function requestVaultFiles(
       },
     )
   })
+}
+
+function requestVaultIndexStatus(
+  rootURL: string,
+  hiddenItems?: string,
+): Promise<VaultIndexStatus> {
+  return new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage(
+      { action: 'getVaultIndexStatus', data: { rootURL, hiddenItems } },
+      (response: VaultIndexStatusResponse) => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message))
+          return
+        }
+        if (!response?.ok || !response.index) {
+          reject(new Error(response?.error || '无法读取文件索引状态'))
+          return
+        }
+        resolve(response.index)
+      },
+    )
+  })
+}
+
+function formatIndexTime(time: number): string {
+  return new Intl.DateTimeFormat(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(time)
 }
 
 function searchVaultFiles(
